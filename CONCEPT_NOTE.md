@@ -92,8 +92,15 @@ emergency systems (SMU IJCAI-2019 SAA-MIP; Vlahogianni KDE+MCLP; Miao/Easa queue
   place them to cover the maximum **risk×load-weighted** demand within a coverage radius (PuLP/CBC).
 - **Risk×load weighting.** Deployment priority blends forecast load *and* mean closure-risk — both
   high-traffic and high-risk corridors, per the OR location-allocation literature.
-- **Action tier & diversion**: RED/AMBER/GREEN + diversion from closure-risk + cause (VIP / event /
-  procession). Every number is traceable — no black box.
+- **Cause-aware playbook (encodes BTP ground reality).** Each event cause carries an operational
+  profile: a *crowd-control* officer load (bandobast), plus whether barricading and route diversion
+  are needed. So total officers = incident-response (M/M/c) **+** crowd-control (cause-driven):
+  a public event / protest / procession (pedestrian crowds on the carriageway) gets the most
+  officers **and** barricade **and** diversion; a VIP movement gets barricade + diversion (road
+  cleared for the convoy); a lone breakdown gets a minimal response, no barricade, no diversion.
+  Validated on the real data — recommendations differ sensibly by cause (see `src/test_recommendations.py`).
+- **Action tier** RED/AMBER/GREEN from closure-risk + crowd + priority (a high-priority *breakdown*
+  escalates to AMBER, not RED — priority alone doesn't trigger full deployment). Every number traceable.
 
 ## 5. Data Findings That Build Trust
 1. **Timestamps are local IST mislabeled `+00`** — proven via the bimodal rush-hour signature

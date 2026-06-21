@@ -49,11 +49,14 @@ BASE_RATE = float(df["requires_road_closure"].astype(str).str.lower().eq("true")
 def cause_eb_rates(K=8):
     """Empirical-Bayes historical closure rate per event cause (shrunk toward base by sample size).
     Used as a recall-favoring safety floor so rare high-impact causes (e.g. VIP movement, only ~20
-    samples) are never under-flagged just because the ML model lacks training examples for them."""
-    d = df.copy()
-    d["c"] = d["requires_road_closure"].astype(str).str.lower().eq("true")
-    g = d.groupby("event_cause", observed=True)["c"].agg(["mean", "size"])
-    eb = (g["size"] * g["mean"] + K * BASE_RATE) / (g["size"] + K)
+    samples) are never under-flagged just because the ML model lacks training examples for them.
+    Computed on ALL labelled events (closure label needs no start time) so rare causes keep signal."""
+    raw = pd.read_csv(os.path.join(ROOT, "data", "events.csv"), low_memory=False)
+    raw = raw[raw["requires_road_closure"].notna()]
+    c = raw["requires_road_closure"].astype(str).str.lower().eq("true")
+    base = c.mean()
+    g = c.groupby(raw["event_cause"]).agg(["mean", "size"])
+    eb = (g["size"] * g["mean"] + K * base) / (g["size"] + K)
     return eb.to_dict()
 
 CAUSE_EB = cause_eb_rates()
@@ -144,24 +147,29 @@ with tab0:
     # OR staffing: size officers so expected wait <= SLA over the concentrated event window
     st_res = min_officers_for_sla(exp_incidents, SLA_MIN, SERVICE_MIN, active_hours=window_h)
 
+    incident_officers = st_res["officers"]          # M/M/c incident-response
+    crowd_officers = act["crowd_officers"]           # cause-driven crowd control (bandobast)
+    total_officers = incident_officers + crowd_officers
+
     st.markdown("### Recommendation")
     m = st.columns(4)
     color = "🔴" if act["tier"].startswith("RED") else ("🟠" if act["tier"].startswith("AMBER") else "🟢")
     mult = prob / BASE_RATE if BASE_RATE else 0
     m[0].metric("Closure / barricade risk", f"{prob*100:.0f}%",
                 delta=f"{mult:.1f}× city avg ({BASE_RATE*100:.0f}%)", delta_color="inverse",
-                help="Calibrated probability this event needs a road closure. "
-                     "Shown relative to the citywide base rate.")
+                help="max(calibrated model prob, historical cause rate). Shown vs citywide base rate.")
     m[1].metric("Action tier", f"{color} {act['tier'].split(' - ')[0]}")
-    m[2].metric("Officers (SLA-sized)", st_res["officers"],
-                help=f"M/M/c queueing so expected wait ≤ {SLA_MIN} min")
-    m[3].metric("Expected wait", f"{st_res['expected_wait_min']} min")
+    m[2].metric("Total officers", total_officers,
+                help=f"{crowd_officers} crowd-control (cause-driven) + {incident_officers} incident-response (M/M/c)")
+    m[3].metric("Incident response wait", f"{st_res['expected_wait_min']} min")
 
-    b = st.columns(2)
-    b[0].info(f"**Barricading:** {act['barricade']}  \n**Diversion plan:** {act['diversion_plan']}")
-    sla_txt = "✅ SLA met" if st_res["sla_met"] else "⚠️ SLA NOT met - add officers"
-    b[1].success(f"**Deployment:** {act['tier']}  \n**{sla_txt}**  "
-                 f"(utilization {st_res['utilization']*100:.0f}%)")
+    b = st.columns(3)
+    b[0].info(f"**Barricading:** {act['barricade']}")
+    b[1].info(f"**Route diversion:** {act['diversion_plan']}")
+    sla_txt = "✅ SLA met" if st_res["sla_met"] else "⚠️ SLA NOT met"
+    b[2].info(f"**Officers:** {crowd_officers} crowd + {incident_officers} response  \n{sla_txt}")
+    st.success(f"**Deployment:** {act['tier'].split(' - ')[1].capitalize()}  ·  "
+               f"**Why:** {act['why']}")
     st.map(row.rename(columns={"latitude": "lat", "longitude": "lon"})[["lat", "lon"]])
     st.caption(f"Risk = max(calibrated model {model_prob*100:.0f}%, historical {sim_cause} rate "
                f"{CAUSE_EB.get(sim_cause, BASE_RATE)*100:.0f}%) — a recall-favoring safety floor so rare "
@@ -235,15 +243,17 @@ with tab2:
         ev["tier"] = [a["tier"] for a in acts]
         ev["barricade"] = [a["barricade"] for a in acts]
         ev["diversion"] = [a["diversion_plan"] for a in acts]
+        ev["officers"] = [a["crowd_officers"] + 1 for a in acts]   # crowd-control + 1 response unit
         ev = ev.sort_values("closure_prob", ascending=False)
 
         red = (ev["tier"].str.startswith("RED")).sum()
-        c1, c2, c3 = st.columns(3)
+        c1, c2, c3, c4 = st.columns(4)
         c1.metric("Events", len(ev)); c2.metric("RED (deploy now)", int(red))
         c3.metric("Barricades advised", int((ev["barricade"] == "Yes").sum()))
+        c4.metric("Officers (total)", int(ev["officers"].sum()))
 
         show = ev[["dt", "corridor", "event_cause", "priority", "closure_prob",
-                   "tier", "barricade", "diversion"]].copy()
+                   "tier", "barricade", "diversion", "officers"]].copy()
         show["closure_prob"] = (show["closure_prob"] * 100).round(1)
         st.dataframe(show.rename(columns={"closure_prob": "closure_risk_%"}),
                      use_container_width=True, height=340)
