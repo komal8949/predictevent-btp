@@ -1,0 +1,3 @@
+-r requirements.txt
+torch          # src/deep_forecast.py (CPU ok)
+python-pptx    # src/make_ppt.py

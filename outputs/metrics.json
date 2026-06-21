@@ -1,0 +1,48 @@
+{
+  "duration_reg": {
+    "n_test": 492,
+    "MAE_min": 106.74,
+    "MAE_baseline_median": 96.43,
+    "note": "administrative close-time dominates; not reliably learnable"
+  },
+  "duration_band": {
+    "accuracy": 0.413,
+    "macro_f1": 0.388,
+    "baseline_majority_acc": 0.492
+  },
+  "road_closure": {
+    "n_train": 6445,
+    "n_test": 1612,
+    "positive_rate_test": 0.072,
+    "ROC_AUC": 0.814,
+    "PR_AUC": 0.32,
+    "PR_AUC_baseline": 0.072,
+    "tuned_threshold": 0.098,
+    "recall_pos@tuned": 0.716,
+    "f1_pos@tuned": 0.308,
+    "calibration": {
+      "brier_before": 0.1854,
+      "brier_after": 0.0578,
+      "ece_before": 0.3295,
+      "ece_after": 0.0217
+    },
+    "top_features": {
+      "hour": 0.0039,
+      "veh_type": 0.0063,
+      "latitude": 0.0151,
+      "longitude": 0.0158,
+      "corridor": 0.0516,
+      "event_cause": 0.1823
+    }
+  },
+  "hotspot_load": {
+    "n_train": 2220,
+    "n_test": 540,
+    "corridors": 20,
+    "MAE_model": 2.19,
+    "MAE_seasonal_naive_lag7": 3.061,
+    "MAE_roll7_mean": 4.552,
+    "R2_model": 0.536,
+    "R2_seasonal_naive": -0.317
+  }
+}

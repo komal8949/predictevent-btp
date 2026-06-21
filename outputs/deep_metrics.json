@@ -1,0 +1,18 @@
+{
+  "test_rows": 540,
+  "BEFORE_gbm": {
+    "MAE": 2.239,
+    "R2": 0.549
+  },
+  "AFTER_deep": {
+    "MAE": 2.123,
+    "R2": 0.547
+  },
+  "ENSEMBLE_gbm+deep": {
+    "MAE": 2.155,
+    "R2": 0.554
+  },
+  "winner": "deep",
+  "deep_mae_delta_pct": -5.2,
+  "ensemble_mae_delta_pct": -3.8
+}
