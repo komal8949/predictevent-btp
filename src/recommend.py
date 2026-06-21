@@ -60,21 +60,43 @@ DEFAULT_PROFILE = {"crowd": 0.30, "barricade": False, "diversion": False, "why":
 CROWD_SCALE = 12          # officers for a max-crowd (public_event) event before priority weighting
 
 
-def event_action(closure_prob, cause, priority, crowd_scale=CROWD_SCALE):
-    """Per-event playbook: cause-aware barricade / diversion / crowd-control officers + tier."""
+def commute_context(hour, dow):
+    """Bengaluru commute-aware ambient-traffic multiplier.
+    The same event is far more disruptive during weekday rush (7-9 AM, 5-9 PM) because it compounds
+    the IT-commute peak; weekends are lighter (all firms off Sun, ~80% off Sat). Returns a factor
+    that scales deployment and a human-readable label."""
+    if hour is None or dow is None:
+        return {"factor": 1.0, "label": "—"}
+    h, d = int(hour), int(dow)
+    morning, evening = (7 <= h <= 9), (17 <= h <= 21)
+    if d <= 4:                                            # Mon-Fri
+        if evening: return {"factor": 1.6, "label": "Weekday evening peak (5-9 PM)"}
+        if morning: return {"factor": 1.5, "label": "Weekday morning peak (7-9 AM)"}
+        if 10 <= h <= 16: return {"factor": 1.0, "label": "Weekday off-peak"}
+        return {"factor": 0.7, "label": "Weekday night"}
+    if d == 5:                                            # Saturday (~80% offices closed)
+        if morning or evening: return {"factor": 1.1, "label": "Saturday (partial offices + leisure)"}
+        return {"factor": 0.85, "label": "Saturday off-peak"}
+    if evening: return {"factor": 0.85, "label": "Sunday evening (leisure)"}   # Sunday
+    return {"factor": 0.65, "label": "Sunday (low commute)"}
+
+
+def event_action(closure_prob, cause, priority, hour=None, dow=None, crowd_scale=CROWD_SCALE):
+    """Per-event playbook: cause-aware + commute-aware barricade / diversion / officers + tier."""
     p = CAUSE_PROFILE.get(str(cause).lower(), DEFAULT_PROFILE)
     hi_prio = str(priority).lower() == "high"
+    ctx = commute_context(hour, dow)
+    peak = ctx["factor"] >= 1.4                            # weekday rush hour
     # barricade / diversion: triggered by the cause OR by high model-estimated closure risk
     barricade = p["barricade"] or closure_prob >= 0.35
     diversion = p["diversion"] or closure_prob >= 0.5
-    # crowd-control officers scale with the cause's crowd intensity (+30% if high priority)
-    crowd_officers = int(np.ceil(p["crowd"] * crowd_scale * (1.3 if hi_prio else 1.0)))
-    # tier: RED for genuinely severe events; high priority alone (e.g. a flagged breakdown)
-    # escalates to AMBER, not RED, unless the risk/crowd is also material.
+    # crowd-control officers scale with cause intensity, priority, AND ambient commute load
+    crowd_officers = int(np.ceil(p["crowd"] * crowd_scale * (1.3 if hi_prio else 1.0) * ctx["factor"]))
+    # tier: RED for severe events OR a material event landing in weekday rush hour
     material = closure_prob >= 0.25 or p["crowd"] >= 0.35
-    if closure_prob >= 0.45 or p["crowd"] >= 0.8 or (hi_prio and material):
+    if closure_prob >= 0.45 or p["crowd"] >= 0.8 or (hi_prio and material) or (peak and material):
         tier = "RED - deploy now"
-    elif material or hi_prio:
+    elif material or hi_prio or peak:
         tier = "AMBER - monitor + ready unit"
     else:
         tier = "GREEN - log only"
@@ -83,6 +105,8 @@ def event_action(closure_prob, cause, priority, crowd_scale=CROWD_SCALE):
         "barricade": "Yes" if barricade else "No",
         "diversion_plan": "Activate" if diversion else "Standby",
         "crowd_officers": crowd_officers,
+        "commute_factor": ctx["factor"],
+        "commute_label": ctx["label"],
         "why": p["why"],
     }
 

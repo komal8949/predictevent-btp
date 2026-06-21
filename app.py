@@ -143,7 +143,7 @@ with tab0:
 
     model_prob = float(M["closure"].predict_proba(row[CAT + NUM])[:, 1][0])
     prob = event_risk(model_prob, sim_cause)            # max(model, historical cause rate)
-    act = event_action(prob, sim_cause, sim_prio)
+    act = event_action(prob, sim_cause, sim_prio, hour=sim_hour, dow=dow_idx)
     # OR staffing: size officers so expected wait <= SLA over the concentrated event window
     st_res = min_officers_for_sla(exp_incidents, SLA_MIN, SERVICE_MIN, active_hours=window_h)
 
@@ -168,8 +168,12 @@ with tab0:
     b[1].info(f"**Route diversion:** {act['diversion_plan']}")
     sla_txt = "✅ SLA met" if st_res["sla_met"] else "⚠️ SLA NOT met"
     b[2].info(f"**Officers:** {crowd_officers} crowd + {incident_officers} response  \n{sla_txt}")
+    peak_icon = "🔺" if act["commute_factor"] >= 1.4 else ("🔻" if act["commute_factor"] < 0.9 else "▪️")
     st.success(f"**Deployment:** {act['tier'].split(' - ')[1].capitalize()}  ·  "
                f"**Why:** {act['why']}")
+    st.caption(f"{peak_icon} Commute context: **{act['commute_label']}** "
+               f"({act['commute_factor']:.2f}× ambient traffic) — officer count is scaled for this. "
+               "Bengaluru IT-commute peaks: weekday 7-9 AM & 5-9 PM; Sundays light.")
     st.map(row.rename(columns={"latitude": "lat", "longitude": "lon"})[["lat", "lon"]])
     st.caption(f"Risk = max(calibrated model {model_prob*100:.0f}%, historical {sim_cause} rate "
                f"{CAUSE_EB.get(sim_cause, BASE_RATE)*100:.0f}%) — a recall-favoring safety floor so rare "
@@ -239,7 +243,8 @@ with tab2:
     if len(ev):
         mp_ = M["closure"].predict_proba(ev[CAT + NUM])[:, 1]
         ev["closure_prob"] = [event_risk(p, c) for p, c in zip(mp_, ev["event_cause"])]
-        acts = ev.apply(lambda r: event_action(r["closure_prob"], r["event_cause"], r["priority"]), axis=1)
+        acts = ev.apply(lambda r: event_action(r["closure_prob"], r["event_cause"], r["priority"],
+                                               hour=r["hour"], dow=r["dow"]), axis=1)
         ev["tier"] = [a["tier"] for a in acts]
         ev["barricade"] = [a["barricade"] for a in acts]
         ev["diversion"] = [a["diversion_plan"] for a in acts]

@@ -99,8 +99,13 @@ emergency systems (SMU IJCAI-2019 SAA-MIP; Vlahogianni KDE+MCLP; Miao/Easa queue
   officers **and** barricade **and** diversion; a VIP movement gets barricade + diversion (road
   cleared for the convoy); a lone breakdown gets a minimal response, no barricade, no diversion.
   Validated on the real data — recommendations differ sensibly by cause (see `src/test_recommendations.py`).
-- **Action tier** RED/AMBER/GREEN from closure-risk + crowd + priority (a high-priority *breakdown*
-  escalates to AMBER, not RED — priority alone doesn't trigger full deployment). Every number traceable.
+- **Commute-aware scaling (Bengaluru reality).** The same event is far more disruptive during the
+  IT-commute peak, so deployment scales with an ambient-traffic factor: weekday **7-9 AM (1.5×)** and
+  **5-9 PM (1.6×)** rush, weekday off-peak 1.0×, weekday night 0.7×, Saturday ~1.1× (≈80% offices
+  closed), Sunday 0.65×. A public event at weekday evening peak draws ~25 crowd officers vs ~11 on a
+  Sunday; a breakdown that's GREEN on Sunday escalates to AMBER in weekday rush.
+- **Action tier** RED/AMBER/GREEN from closure-risk + crowd + priority + commute peak (a high-priority
+  *breakdown* escalates to AMBER, not RED — priority alone doesn't trigger full deployment). Traceable.
 
 ## 5. Data Findings That Build Trust
 1. **Timestamps are local IST mislabeled `+00`** — proven via the bimodal rush-hour signature
