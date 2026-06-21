@@ -26,8 +26,10 @@ identical split): MAE **2.12** vs GBM **2.24** (~5% better, consistent over 3 se
 Ensemble (GBM+deep) R² 0.55. GBM kept in production for robustness; deep model is the upgrade path.
 
 **Rigor adds:**
-- **Calibrated probabilities** — closure-risk is Platt-calibrated: ECE 0.33→0.02, Brier 0.185→0.058
-  (so "81% risk" really means ~81%; the OR engine consumes the probability directly).
+- **Calibrated probabilities** — closure-risk is isotonic-calibrated: ECE 0.33→0.03, Brier 0.185→0.058
+  (the OR engine consumes the probability directly, so it must mean what it says).
+- **Recall-favoring safety floor** — displayed risk = max(model prob, empirical-Bayes historical cause
+  rate), so rare high-impact causes (VIP movement: ~20 samples, 80% historical) are never under-flagged.
 - **Cross-validation ± CI** (`src/validate.py`) — 5-fold expanding-window: hotspot R² 0.56±0.14,
   closure ROC-AUC 0.73±0.05. Reports the spread, not a cherry-picked single split.
 

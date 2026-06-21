@@ -122,7 +122,7 @@ box(s, Inches(0.6), Inches(4.35), Inches(8.0), Inches(2.6),
     "Operating point: recall-floor — catches ≥75% of closures (a missed closure costs BTP more).\n"
     "Top drivers (permutation importance): event_cause ≫ corridor > location > vehicle type.\n"
     "Deep ST-model: MAE 2.12 vs GBM 2.24 (~5% better, R² tied); ensemble R² 0.55. GBM kept in prod.\n"
-    "Calibrated probabilities: ECE 0.33→0.02, Brier 0.185→0.058 — '81% risk' really means ~81%.\n"
+    "Calibrated (isotonic): ECE 0.33→0.03; + safety floor max(model, historical) so VIP (rare) isn't under-flagged.\n"
     "Cross-validated (5-fold expanding): hotspot R² 0.56±0.14, closure AUC 0.73±0.05 — spread, not cherry-pick.",
     size=14, color=NAVY)
 img(s, "closure_calibration.png", Inches(8.9), Inches(4.3), Inches(4.0))

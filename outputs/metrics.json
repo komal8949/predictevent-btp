@@ -14,17 +14,17 @@
     "n_train": 6445,
     "n_test": 1612,
     "positive_rate_test": 0.072,
-    "ROC_AUC": 0.814,
-    "PR_AUC": 0.32,
+    "ROC_AUC": 0.812,
+    "PR_AUC": 0.318,
     "PR_AUC_baseline": 0.072,
-    "tuned_threshold": 0.098,
-    "recall_pos@tuned": 0.716,
-    "f1_pos@tuned": 0.308,
+    "tuned_threshold": 0.095,
+    "recall_pos@tuned": 0.664,
+    "f1_pos@tuned": 0.352,
     "calibration": {
       "brier_before": 0.1854,
       "brier_after": 0.0578,
       "ece_before": 0.3295,
-      "ece_after": 0.0217
+      "ece_after": 0.0267
     },
     "top_features": {
       "hour": 0.0039,

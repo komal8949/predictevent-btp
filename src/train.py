@@ -90,14 +90,14 @@ def ece(y, p, bins=10):
     return e
 
 # Production model: cross-val sigmoid calibration on the FULL train set (uses all data + calibrated).
-cal = CalibratedClassifierCV(clf, method="sigmoid", cv=5)
+cal = CalibratedClassifierCV(clf, method="isotonic", cv=5)   # isotonic preserves the high-risk end
 cal.fit(make_X(tr), tr["y"].values)
 
 # Threshold: recall-floor operating point on a time-based val with prefit calibration (no leakage).
 # BTP-defensible: choose the highest threshold (best precision) that still catches >=75% of closures.
 TARGET_RECALL = 0.75
 clf.fit(make_X(trn), trn["y"].values)
-cal_thr = CalibratedClassifierCV(FrozenEstimator(clf), method="sigmoid").fit(make_X(val), val["y"].values)
+cal_thr = CalibratedClassifierCV(FrozenEstimator(clf), method="isotonic").fit(make_X(val), val["y"].values)
 val_pc = cal_thr.predict_proba(make_X(val))[:, 1]
 prec, rec, thr = precision_recall_curve(val["y"].values, val_pc)
 ok = rec[:-1] >= TARGET_RECALL                       # align rec with thr (len thr = len rec - 1)

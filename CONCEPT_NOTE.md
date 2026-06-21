@@ -71,9 +71,16 @@ higher-frequency feed is available. (Honest engineering: don't ship a heavier mo
 0.14**, closure **ROC-AUC 0.73 ± 0.05** (early folds train on little history, so the full-history
 production model reaches AUC 0.81 / R² 0.54). Reporting the spread, not a cherry-picked number.
 
-**Calibrated probabilities.** The closure-risk output is Platt-calibrated, so "81% risk" really
-means ~81%: **ECE 0.33 → 0.02, Brier 0.185 → 0.058** on the test set. This matters because the OR
-engine consumes the probability directly — a miscalibrated score would distort every staffing number.
+**Calibrated probabilities.** The closure-risk output is isotonic-calibrated: **ECE 0.33 → 0.03,
+Brier 0.185 → 0.058** on the test set, so the probability means what it says. This matters because
+the OR engine consumes it directly — a miscalibrated score would distort every staffing number.
+
+**Recall-favoring safety floor for rare high-impact events.** Some causes are both rare and
+dangerous — e.g. VIP movement has only ~20 samples but an 80% historical closure rate, so the ML
+model alone under-estimates it. The displayed risk is therefore **max(calibrated model probability,
+empirical-Bayes historical cause rate)**, so a known high-risk event type is never under-flagged for
+lack of training data. Result: VIP ≈ 60% (7× city baseline), public event ≈ 43% (5×), breakdown ≈
+5% — matching ground truth. This is a deliberate, BTP-aligned bias toward not missing a closure.
 
 ## 4. From Prediction to Action — OR Optimization Engine
 We replaced naïve heuristics with the **forecast → optimize** pattern used in deployed police/

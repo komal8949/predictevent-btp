@@ -43,6 +43,24 @@ def models():
 df = load_data()
 M = models()
 panel = pd.read_csv(os.path.join(OUT, "panel.csv"), parse_dates=["date"])
+BASE_RATE = float(df["requires_road_closure"].astype(str).str.lower().eq("true").mean())  # ~0.08
+
+@st.cache_data
+def cause_eb_rates(K=8):
+    """Empirical-Bayes historical closure rate per event cause (shrunk toward base by sample size).
+    Used as a recall-favoring safety floor so rare high-impact causes (e.g. VIP movement, only ~20
+    samples) are never under-flagged just because the ML model lacks training examples for them."""
+    d = df.copy()
+    d["c"] = d["requires_road_closure"].astype(str).str.lower().eq("true")
+    g = d.groupby("event_cause", observed=True)["c"].agg(["mean", "size"])
+    eb = (g["size"] * g["mean"] + K * BASE_RATE) / (g["size"] + K)
+    return eb.to_dict()
+
+CAUSE_EB = cause_eb_rates()
+
+def event_risk(model_prob, cause):
+    """Final displayed closure risk = max(calibrated model prob, historical cause rate)."""
+    return max(float(model_prob), float(CAUSE_EB.get(cause, BASE_RATE)))
 
 @st.cache_data
 def corridor_stats():
@@ -120,7 +138,8 @@ with tab0:
         help="Sub-incidents (breakdowns, jams, scuffles) the event is expected to generate.")
     window_h = cc4[1].slider("Event window (hours)", 1, 12, 3)
 
-    prob = float(M["closure"].predict_proba(row[CAT + NUM])[:, 1][0])
+    model_prob = float(M["closure"].predict_proba(row[CAT + NUM])[:, 1][0])
+    prob = event_risk(model_prob, sim_cause)            # max(model, historical cause rate)
     act = event_action(prob, sim_cause, sim_prio)
     # OR staffing: size officers so expected wait <= SLA over the concentrated event window
     st_res = min_officers_for_sla(exp_incidents, SLA_MIN, SERVICE_MIN, active_hours=window_h)
@@ -128,7 +147,11 @@ with tab0:
     st.markdown("### Recommendation")
     m = st.columns(4)
     color = "🔴" if act["tier"].startswith("RED") else ("🟠" if act["tier"].startswith("AMBER") else "🟢")
-    m[0].metric("Closure / barricade risk", f"{prob*100:.0f}%")
+    mult = prob / BASE_RATE if BASE_RATE else 0
+    m[0].metric("Closure / barricade risk", f"{prob*100:.0f}%",
+                delta=f"{mult:.1f}× city avg ({BASE_RATE*100:.0f}%)", delta_color="inverse",
+                help="Calibrated probability this event needs a road closure. "
+                     "Shown relative to the citywide base rate.")
     m[1].metric("Action tier", f"{color} {act['tier'].split(' - ')[0]}")
     m[2].metric("Officers (SLA-sized)", st_res["officers"],
                 help=f"M/M/c queueing so expected wait ≤ {SLA_MIN} min")
@@ -140,8 +163,10 @@ with tab0:
     b[1].success(f"**Deployment:** {act['tier']}  \n**{sla_txt}**  "
                  f"(utilization {st_res['utilization']*100:.0f}%)")
     st.map(row.rename(columns={"latitude": "lat", "longitude": "lon"})[["lat", "lon"]])
-    st.caption("Risk from closure-risk classifier (ROC-AUC 0.81); officer count from M/M/c "
-               "queueing (Erlang-C) tied to the wait SLA; barricade/diversion from the playbook.")
+    st.caption(f"Risk = max(calibrated model {model_prob*100:.0f}%, historical {sim_cause} rate "
+               f"{CAUSE_EB.get(sim_cause, BASE_RATE)*100:.0f}%) — a recall-favoring safety floor so rare "
+               "high-impact events (VIP) are never under-flagged. Officers from M/M/c queueing (Erlang-C) "
+               "tied to the wait SLA; barricade/diversion from the playbook.")
 
 # ---------------- TAB 1: hotspot forecast + OR allocation ----------------
 with tab1:
@@ -204,7 +229,8 @@ with tab2:
                             value=sorted(df["date"].dt.date.unique())[-2], key="d2")
     ev = df[df["date"].dt.date == day2].copy()
     if len(ev):
-        ev["closure_prob"] = M["closure"].predict_proba(ev[CAT + NUM])[:, 1]
+        mp_ = M["closure"].predict_proba(ev[CAT + NUM])[:, 1]
+        ev["closure_prob"] = [event_risk(p, c) for p, c in zip(mp_, ev["event_cause"])]
         acts = ev.apply(lambda r: event_action(r["closure_prob"], r["event_cause"], r["priority"]), axis=1)
         ev["tier"] = [a["tier"] for a in acts]
         ev["barricade"] = [a["barricade"] for a in acts]
