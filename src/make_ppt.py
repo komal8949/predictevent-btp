@@ -134,6 +134,7 @@ bullets(s, [
     ("Manpower = M/M/c queueing (Erlang-C): officer count sized so expected response wait ≤ SLA (e.g. 5 min) — a number WITH a service-level guarantee.", 0),
     ("Barricade placement = Maximum Coverage Location Problem (MCLP): place P units to cover max risk×load-weighted demand (PuLP/CBC).", 0),
     ("Risk×load weighting: both high-traffic AND high-risk corridors, per OR location-allocation literature.", 0),
+    ("Bengaluru real-world context (researched): corridor congestion (ORR East 1.86 .. Magadi 1.13), commute peaks, monsoon, festivals, metro works, heavy-vehicle bans — all scale the deployment.", 0),
     ("Every number is traceable — no black box. Evidence: SMU IJCAI-2019, Vlahogianni 2019, Miao/Easa 2021.", 0),
 ], size=17)
 

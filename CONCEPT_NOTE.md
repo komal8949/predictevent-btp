@@ -99,11 +99,18 @@ emergency systems (SMU IJCAI-2019 SAA-MIP; Vlahogianni KDE+MCLP; Miao/Easa queue
   officers **and** barricade **and** diversion; a VIP movement gets barricade + diversion (road
   cleared for the convoy); a lone breakdown gets a minimal response, no barricade, no diversion.
   Validated on the real data — recommendations differ sensibly by cause (see `src/test_recommendations.py`).
-- **Commute-aware scaling (Bengaluru reality).** The same event is far more disruptive during the
-  IT-commute peak, so deployment scales with an ambient-traffic factor: weekday **7-9 AM (1.5×)** and
-  **5-9 PM (1.6×)** rush, weekday off-peak 1.0×, weekday night 0.7×, Saturday ~1.1× (≈80% offices
-  closed), Sunday 0.65×. A public event at weekday evening peak draws ~25 crowd officers vs ~11 on a
-  Sunday; a breakdown that's GREEN on Sunday escalates to AMBER in weekday rush.
+- **Bengaluru real-world context engine (`src/bengaluru_context.py`, researched).** Deployment scales
+  with an *ambient-disruption multiplier* that fuses the factors a BTP officer actually weighs:
+  - **Corridor chronic congestion** — ORR East (1.0) ≫ Hosur ≈ ORR North (0.95) > Bellary (0.9) >
+    Old Madras (0.8) > Bannerghatta (0.75) > Tumkur (0.65) > Mysore (0.6) > Magadi (0.45). (TomTom/BTP)
+  - **Commute peaks** — weekday 7-9 AM (1.5×) & 5-9 PM (1.6×, Fri 1.7×), Monday heaviest, Sat ~1.1×
+    (≈80% offices shut), Sun 0.65×; amplified on IT-dense corridors.
+  - **Monsoon** — month × corridor flood-vulnerability (Sep-Nov worst; ORR/Hosur/Old Madras most flood-prone).
+  - **Festival season** — Karaga (Mar-Apr), Ganesha (Aug-Sep), Ramzan, Kadalekai, Christmas/NYE.
+  - **Metro construction** drag (ORR/Bellary/Bannerghatta 2024-26) and **heavy-vehicle ban-window**
+    breaches (trucks barred weekday 7-11 AM / 4-10 PM) are flagged.
+  Validated on the real data: avg disruption ranks ORR East 1.86 → Hosur 1.67 → … → Magadi 1.13,
+  matching the researched congestion order. Every multiplier is shown to the officer with its breakdown.
 - **Action tier** RED/AMBER/GREEN from closure-risk + crowd + priority + commute peak (a high-priority
   *breakdown* escalates to AMBER, not RED — priority alone doesn't trigger full deployment). Traceable.
 

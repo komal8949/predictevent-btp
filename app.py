@@ -8,8 +8,9 @@ import pandas as pd
 import streamlit as st
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
-from recommend import load_models, event_action, CORRIDOR_WEIGHT
+from recommend import load_models, event_action
 from optimize import min_officers_for_sla, mclp, risk_load_weight
+from bengaluru_context import corridor_weight
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(ROOT, "outputs")
@@ -117,18 +118,22 @@ with tab0:
     sim_veh = cc2[2].selectbox("Vehicle type", ["others", "private_car", "bmtc_bus",
         "heavy_vehicle", "truck", "private_bus", "ksrtc_bus", "lcv", "taxi"])
 
-    cc3 = st.columns(3)
+    cc3 = st.columns(4)
     sim_hour = cc3[0].slider("Hour of day", 0, 23, 19)
     sim_dow = cc3[1].selectbox("Day", ["Monday", "Tuesday", "Wednesday", "Thursday",
         "Friday", "Saturday", "Sunday"], index=5)
-    sim_lat = cc3[2].number_input("Latitude", value=12.9788, format="%.4f")
+    MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    sim_month = cc3[2].selectbox("Month", MONTHS, index=8,
+        help="Drives monsoon (Sep-Nov worst) and festival-season factors.")
+    sim_lat = cc3[3].number_input("Latitude", value=12.9788, format="%.4f")
     sim_lon = st.number_input("Longitude", value=77.5996, format="%.4f")
 
     dow_idx = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].index(sim_dow)
+    month_idx = MONTHS.index(sim_month) + 1
     row = pd.DataFrame([{
         "event_type": sim_type, "event_cause": sim_cause, "veh_type": sim_veh,
         "corridor": sim_corr, "zone": sim_zone, "priority": sim_prio,
-        "hour": sim_hour, "dow": dow_idx, "month": 4,
+        "hour": sim_hour, "dow": dow_idx, "month": month_idx,
         "is_weekend": int(dow_idx >= 5),
         "daypart": int(np.clip(np.digitize(sim_hour, [6, 11, 16]), 0, 3)),
         "latitude": sim_lat, "longitude": sim_lon,
@@ -143,7 +148,8 @@ with tab0:
 
     model_prob = float(M["closure"].predict_proba(row[CAT + NUM])[:, 1][0])
     prob = event_risk(model_prob, sim_cause)            # max(model, historical cause rate)
-    act = event_action(prob, sim_cause, sim_prio, hour=sim_hour, dow=dow_idx)
+    act = event_action(prob, sim_cause, sim_prio, corridor=sim_corr, hour=sim_hour,
+                       dow=dow_idx, month=month_idx, veh_type=sim_veh)
     # OR staffing: size officers so expected wait <= SLA over the concentrated event window
     st_res = min_officers_for_sla(exp_incidents, SLA_MIN, SERVICE_MIN, active_hours=window_h)
 
@@ -168,12 +174,15 @@ with tab0:
     b[1].info(f"**Route diversion:** {act['diversion_plan']}")
     sla_txt = "✅ SLA met" if st_res["sla_met"] else "⚠️ SLA NOT met"
     b[2].info(f"**Officers:** {crowd_officers} crowd + {incident_officers} response  \n{sla_txt}")
-    peak_icon = "🔺" if act["commute_factor"] >= 1.4 else ("🔻" if act["commute_factor"] < 0.9 else "▪️")
+    mlt = act["disruption_mult"]
+    peak_icon = "🔺" if mlt >= 1.6 else ("🔻" if mlt < 0.9 else "▪️")
     st.success(f"**Deployment:** {act['tier'].split(' - ')[1].capitalize()}  ·  "
                f"**Why:** {act['why']}")
-    st.caption(f"{peak_icon} Commute context: **{act['commute_label']}** "
-               f"({act['commute_factor']:.2f}× ambient traffic) — officer count is scaled for this. "
-               "Bengaluru IT-commute peaks: weekday 7-9 AM & 5-9 PM; Sundays light.")
+    st.markdown(f"{peak_icon} **Bengaluru context — disruption ×{mlt:.2f}** "
+                f"(officer count scaled for this):")
+    st.caption("  ·  ".join(act["context_breakdown"]))
+    if act["heavy_vehicle"]:
+        st.warning("🚛 Heavy vehicle in a BTP ban window (weekday 7-11 AM / 4-10 PM) — flag for enforcement.")
     st.map(row.rename(columns={"latitude": "lat", "longitude": "lon"})[["lat", "lon"]])
     st.caption(f"Risk = max(calibrated model {model_prob*100:.0f}%, historical {sim_cause} rate "
                f"{CAUSE_EB.get(sim_cause, BASE_RATE)*100:.0f}%) — a recall-favoring safety floor so rare "
@@ -199,7 +208,9 @@ with tab1:
     staff = snap["pred_load"].apply(lambda l: min_officers_for_sla(l, SLA_MIN, SERVICE_MIN))
     snap["officers"] = [s["officers"] for s in staff]
     snap["exp_wait_min"] = [s["expected_wait_min"] for s in staff]
-    snap["priority_score"] = [risk_load_weight(l, r) for l, r in zip(snap["pred_load"], snap["mean_risk"])]
+    # priority = (risk×load) weighted up by the corridor's chronic congestion severity
+    snap["priority_score"] = [risk_load_weight(l, r) * corridor_weight(c)
+                              for l, r, c in zip(snap["pred_load"], snap["mean_risk"], snap["corridor"])]
     snap = snap.sort_values("priority_score", ascending=False)
 
     c1, c2, c3, c4 = st.columns(4)
@@ -244,7 +255,8 @@ with tab2:
         mp_ = M["closure"].predict_proba(ev[CAT + NUM])[:, 1]
         ev["closure_prob"] = [event_risk(p, c) for p, c in zip(mp_, ev["event_cause"])]
         acts = ev.apply(lambda r: event_action(r["closure_prob"], r["event_cause"], r["priority"],
-                                               hour=r["hour"], dow=r["dow"]), axis=1)
+                                               corridor=r["corridor"], hour=r["hour"], dow=r["dow"],
+                                               month=r["month"], veh_type=r["veh_type"]), axis=1)
         ev["tier"] = [a["tier"] for a in acts]
         ev["barricade"] = [a["barricade"] for a in acts]
         ev["diversion"] = [a["diversion_plan"] for a in acts]

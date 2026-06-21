@@ -85,7 +85,10 @@ data/events.csv          provided dataset (only HackerEarth data used — no ext
 src/eda.py               EDA + figures
 src/train.py             closure classifier (leakage-checked) + duration models
 src/hotspot.py           spatio-temporal load forecaster (headline)
-src/recommend.py         action-tier playbook (RED/AMBER/GREEN, barricade, diversion)
+src/recommend.py         cause-aware action playbook (RED/AMBER/GREEN, barricade, diversion, officers)
+src/bengaluru_context.py real-world context: corridor congestion, commute peaks, monsoon, festivals,
+                         metro construction, heavy-vehicle bans (researched 2024-26)
+src/test_recommendations.py validation of the recommendation engine on the real data
 src/optimize.py          OR engine — M/M/c (Erlang-C) staffing + MCLP placement
 src/deep_forecast.py     deep ST-model benchmark (corridor embedding + GRU + fusion) + ensemble
 src/validate.py          time-series cross-validation with confidence intervals

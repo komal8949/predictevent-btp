@@ -32,19 +32,28 @@ for c in CAT:
 
 mp = M["closure"].predict_proba(df[CAT + NUM])[:, 1]
 recs = []
-for p, cause, prio in zip(mp, df["event_cause"].astype(str), df["priority"].astype(str)):
+for p, cause, prio, corr, hr, dw, mo, vt in zip(
+        mp, df["event_cause"].astype(str), df["priority"].astype(str), df["corridor"].astype(str),
+        df["hour"], df["dow"], df["month"], df["veh_type"].astype(str)):
     risk = max(float(p), ebr.get(cause, base))
-    a = event_action(risk, cause, prio)
-    recs.append({"cause": cause, "risk": risk, "RED": a["tier"].startswith("RED"),
+    a = event_action(risk, cause, prio, corridor=corr, hour=hr, dow=dw, month=mo, veh_type=vt)
+    recs.append({"cause": cause, "corridor": corr, "risk": risk, "RED": a["tier"].startswith("RED"),
                  "barricade": a["barricade"] == "Yes", "diversion": a["diversion_plan"] == "Activate",
-                 "crowd_off": a["crowd_officers"]})
+                 "crowd_off": a["crowd_officers"], "mult": a["disruption_mult"]})
 r = pd.DataFrame(recs)
 
 print(f"base closure rate: {base*100:.1f}%\n")
-print(f"{'cause':18s} {'n':>5} {'risk%':>6} {'RED%':>5} {'barr%':>6} {'div%':>5} {'crowd_off':>9}")
+print("== By cause ==")
+print(f"{'cause':18s} {'n':>5} {'risk%':>6} {'RED%':>5} {'barr%':>6} {'div%':>5} {'crowd_off':>9} {'mult':>5}")
 for cz in ["vip_movement", "public_event", "protest", "procession", "construction",
            "water_logging", "accident", "vehicle_breakdown"]:
     s = r[r.cause == cz]
     if len(s):
         print(f"{cz:18s} {len(s):5d} {s.risk.mean()*100:6.1f} {s.RED.mean()*100:5.0f} "
-              f"{s.barricade.mean()*100:6.0f} {s.diversion.mean()*100:5.0f} {s.crowd_off.mean():9.0f}")
+              f"{s.barricade.mean()*100:6.0f} {s.diversion.mean()*100:5.0f} {s.crowd_off.mean():9.1f} {s['mult'].mean():5.2f}")
+
+print("\n== Context multiplier by corridor (avg ambient disruption) ==")
+top = r["corridor"].value_counts().head(10).index
+for cz in top:
+    s = r[r.corridor == cz]
+    print(f"  {cz:18s} n={len(s):4d}  mult~{s['mult'].mean():.2f}  crowd_off~{s.crowd_off.mean():.1f}")
