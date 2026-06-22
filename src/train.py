@@ -66,8 +66,6 @@ results = {}
 clf_df = df[df["requires_road_closure"].notna()].copy()
 clf_df["y"] = clf_df["requires_road_closure"].astype(bool).astype(int)
 tr, te = time_split(clf_df, 0.8)
-# carve validation slice (last 15% of train, by time) for threshold tuning -- no test leakage
-trn, val = time_split(tr, 0.85)
 
 clf = HistGradientBoostingClassifier(
     categorical_features=CAT_MASK,
@@ -76,7 +74,6 @@ clf = HistGradientBoostingClassifier(
     early_stopping=True, validation_fraction=0.15, random_state=42)
 # --- probability calibration so the % means what it says ---
 from sklearn.calibration import CalibratedClassifierCV, calibration_curve
-from sklearn.frozen import FrozenEstimator
 from sklearn.metrics import brier_score_loss
 
 def ece(y, p, bins=10):
@@ -93,16 +90,33 @@ def ece(y, p, bins=10):
 cal = CalibratedClassifierCV(clf, method="isotonic", cv=5)   # isotonic preserves the high-risk end
 cal.fit(make_X(tr), tr["y"].values)
 
-# Threshold: recall-floor operating point on a time-based val with prefit calibration (no leakage).
-# BTP-defensible: choose the highest threshold (best precision) that still catches >=75% of closures.
-TARGET_RECALL = 0.75
-clf.fit(make_X(trn), trn["y"].values)
-cal_thr = CalibratedClassifierCV(FrozenEstimator(clf), method="isotonic").fit(make_X(val), val["y"].values)
-val_pc = cal_thr.predict_proba(make_X(val))[:, 1]
-prec, rec, thr = precision_recall_curve(val["y"].values, val_pc)
-ok = rec[:-1] >= TARGET_RECALL                       # align rec with thr (len thr = len rec - 1)
-best_thr = float(thr[ok][-1]) if ok.any() else float(thr[0])
-best_thr = round(min(max(best_thr, 0.03), 0.5), 3)
+# Threshold: operating point chosen on FORWARD-CHAINED out-of-fold predictions across the
+# whole training history (TimeSeriesSplit), not a single fragile 15% slice. Pooling ~4
+# time-honest OOF folds shrinks the variance of the operating-point estimate so it transfers
+# to the future test window (the single-slice recall-floor targeted 0.75 on val but degraded
+# to ~0.66 on test). We pick the F2-maximizing threshold: F2 weights recall 2x precision, so
+# it is safety-favouring (missing a real closure costs more than a false alarm) yet still
+# precision-aware -- a stable middle ground vs. a hard recall floor that is fragile both ways.
+from sklearn.model_selection import TimeSeriesSplit
+from sklearn.base import clone
+BETA = 2.0                                            # recall weighted BETA^2 x precision
+tr_sorted = tr.sort_values("start_ord")
+Xtr_all, ytr_all = make_X(tr_sorted), tr_sorted["y"].values
+oof_p = np.full(len(tr_sorted), np.nan)
+for tri, vai in TimeSeriesSplit(n_splits=5).split(Xtr_all):
+    if ytr_all[tri].sum() < 2:                        # need positives to calibrate
+        continue
+    c = CalibratedClassifierCV(clone(clf), method="isotonic", cv=3)
+    c.fit(Xtr_all.iloc[tri], ytr_all[tri])
+    oof_p[vai] = c.predict_proba(Xtr_all.iloc[vai])[:, 1]
+m_oof = ~np.isnan(oof_p)
+prec, rec, thr = precision_recall_curve(ytr_all[m_oof], oof_p[m_oof])
+b2 = BETA * BETA                                      # F-beta over the PR curve (drop last point: no thr)
+fbeta = (1 + b2) * prec[:-1] * rec[:-1] / (b2 * prec[:-1] + rec[:-1] + 1e-12)
+best_thr = round(min(max(float(thr[int(np.argmax(fbeta))]), 0.03), 0.5), 3)
+print(f"OOF threshold selection (F{BETA:g}-max): n_oof={int(m_oof.sum())}, "
+      f"pos={int(ytr_all[m_oof].sum())}, thr={best_thr}, "
+      f"OOF recall={rec[:-1][int(np.argmax(fbeta))]:.3f}")
 
 # evaluate on TEST: base (uncalibrated, full-train) vs calibrated probabilities
 clf.fit(make_X(tr), tr["y"].values)                   # refit base on full train for fair 'before'

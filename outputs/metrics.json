@@ -17,9 +17,9 @@
     "ROC_AUC": 0.812,
     "PR_AUC": 0.318,
     "PR_AUC_baseline": 0.072,
-    "tuned_threshold": 0.095,
-    "recall_pos@tuned": 0.664,
-    "f1_pos@tuned": 0.352,
+    "tuned_threshold": 0.069,
+    "recall_pos@tuned": 0.828,
+    "f1_pos@tuned": 0.255,
     "calibration": {
       "brier_before": 0.1854,
       "brier_after": 0.0578,

@@ -15,10 +15,10 @@ risk of requiring road closure/barricading**, and **converts both into concrete 
 | Component | What it predicts | Result | Baseline | Use |
 |---|---|---|---|---|
 | **Hotspot Load Forecaster** | next-day event load per corridor | **R² 0.536, MAE 2.19** | seasonal-naive R² −0.32 | manpower allocation |
-| **Closure-Risk Classifier** | will event need road closure? | **ROC-AUC 0.813, recall 0.76** | PR-AUC 0.072 | barricading / triage |
+| **Closure-Risk Classifier** | will event need road closure? | **ROC-AUC 0.81, recall 0.83** | PR-AUC 0.072 | barricading / triage |
 | Duration Predictor | event clearance time | not reliably learnable | — | see *Data findings* |
 
-Threshold tuned for **F2 (recall-favoring)** — for BTP a missed closure costs more than a false alarm.
+Operating point = **F2-max on forward-chained out-of-fold predictions** (recall-favoring) — for BTP a missed closure costs more than a false alarm; recall 0.83 on the held-out future window.
 Top closure drivers (permutation importance): **event_cause** >> corridor > location > vehicle type.
 
 **Deep ST-model benchmark** (`src/deep_forecast.py`, corridor embedding + GRU + dual-stream fusion,

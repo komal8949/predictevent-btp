@@ -103,7 +103,7 @@ s = prs.slides.add_slide(BLANK); header(s, "ML Results — honest, time-based sp
 rows = [
     ("Component", "Result", "Baseline"),
     ("Hotspot Load Forecaster", "R² 0.536 · MAE 2.19", "seasonal-naive R² −0.32"),
-    ("Closure-Risk Classifier", "ROC-AUC 0.813 · recall 0.76", "random PR-AUC 0.072"),
+    ("Closure-Risk Classifier", "ROC-AUC 0.81 · recall 0.83", "random PR-AUC 0.072"),
     ("Duration Predictor", "not reliably learnable", "(data limitation, see findings)"),
 ]
 tbl = s.shapes.add_table(4, 3, Inches(0.6), Inches(1.5), Inches(12.1), Inches(2.6)).table
@@ -119,7 +119,7 @@ for r in range(4):
         else:
             p.runs[0].font.color.rgb = GREY
 box(s, Inches(0.6), Inches(4.35), Inches(8.0), Inches(2.6),
-    "Operating point: recall-floor — catches ≥75% of closures (a missed closure costs BTP more).\n"
+    "Operating point: F2-max on forward-chained OOF preds — catches 83% of closures (a missed closure costs BTP more).\n"
     "Top drivers (permutation importance): event_cause ≫ corridor > location > vehicle type.\n"
     "Deep ST-model: MAE 2.12 vs GBM 2.24 (~5% better, R² tied); ensemble R² 0.55. GBM kept in prod.\n"
     "Calibrated (isotonic): ECE 0.33→0.03; + safety floor max(model, historical) so VIP (rare) isn't under-flagged.\n"

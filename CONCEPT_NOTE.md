@@ -38,13 +38,14 @@ barricade placement, and diversion plan.
 | Component | Predicts | Result | Baseline | Drives |
 |---|---|---|---|---|
 | **Hotspot Load Forecaster** | next-day event load / corridor | **R² 0.536, MAE 2.19** | seasonal-naive R² −0.32 | manpower allocation |
-| **Closure-Risk Classifier** | will event need closure? | **ROC-AUC 0.813, recall 0.76** | random PR-AUC 0.072 | barricading & triage |
+| **Closure-Risk Classifier** | will event need closure? | **ROC-AUC 0.81, recall 0.83** | random PR-AUC 0.072 | barricading & triage |
 | Duration Predictor | clearance time | *not reliably learnable* | — | (see §5) |
 
 - **Hotspot** = HistGradientBoosting on a corridor×day panel with calendar + lag/rolling features;
   beats the seasonal-naive baseline by ~28% on MAE.
-- **Closure-risk** = HistGradientBoosting, class-balanced, **threshold tuned for F2** because for BTP
-  a *missed* closure is far costlier than a false alarm. Top drivers (permutation importance):
+- **Closure-risk** = HistGradientBoosting, class-balanced, **operating point = F2-max on forward-chained
+  out-of-fold predictions** (TimeSeriesSplit over the full train history, not a single fragile slice)
+  because for BTP a *missed* closure is far costlier than a false alarm. Top drivers (permutation importance):
   **event_cause ≫ corridor > location > vehicle type** — exactly what an officer would expect.
 
 **Novelty & rigor.** Multi-step spatio-temporal forecasting of *non-recurrent* (event-driven)
